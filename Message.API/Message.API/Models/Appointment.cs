@@ -2,11 +2,8 @@
 
 namespace Message.API.Models;
 
-public class Appointment
+public class Appointment : BaseEntity
 {
-    [Key]
-    public int Id { get; set; }
-
     [Required]
     public string ClientName { get; set; }
 

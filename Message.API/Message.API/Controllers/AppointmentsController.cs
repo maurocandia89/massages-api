@@ -19,22 +19,47 @@ public class AppointmentsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointments(
         string? date = null,
-        [FromQuery] string? clientName = null
+        [FromQuery] string? clientName = null,
+        string? sortBy = null,
+        string? sortDirection = null
     )
     {
         IQueryable<Appointment> query = _context.Appointments;
 
+        query = query.Where(a => a.IsEnabled);
+
         if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out DateTime parsedDate))
         {
             parsedDate = DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc);
-
             query = query.Where(a => a.AppointmentDate.Date == parsedDate.Date);
         }
 
-        // Filtro por nombre
         if (!string.IsNullOrEmpty(clientName))
         {
             query = query.Where(a => a.ClientName.ToLower().Contains(clientName.ToLower()));
+        }
+
+        if (!string.IsNullOrEmpty(sortBy))
+        {
+            var isDescending = sortDirection?.ToLower() == "desc";
+
+            query = sortBy.ToLower() switch
+            {
+                "clientname" => isDescending
+                    ? query.OrderByDescending(a => a.ClientName)
+                    : query.OrderBy(a => a.ClientName),
+                "appointmentdate" => isDescending
+                    ? query.OrderByDescending(a => a.AppointmentDate)
+                    : query.OrderBy(a => a.AppointmentDate),
+                "starttime" => isDescending
+                    ? query.OrderByDescending(a => a.StartTime)
+                    : query.OrderBy(a => a.StartTime),
+                _ => query.OrderBy(a => a.Id),
+            };
+        }
+        else
+        {
+            query = query.OrderBy(a => a.Id);
         }
 
         return await query.ToListAsync();
@@ -54,24 +79,40 @@ public class AppointmentsController : ControllerBase
         return appointment;
     }
 
-    // POST: api/Appointments
     [HttpPost]
     public async Task<ActionResult<Appointment>> PostAppointment(Appointment appointment)
     {
-        _context.Appointments.Add(appointment);
-        await _context.SaveChangesAsync();
+        try
+        {
+            // Convierte la fecha del turno a UTC antes de guardarla
+            appointment.AppointmentDate = DateTime.SpecifyKind(
+                appointment.AppointmentDate,
+                DateTimeKind.Utc
+            );
 
-        return CreatedAtAction("GetAppointment", new { id = appointment.Id }, appointment);
+            _context.Appointments.Add(appointment);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction("GetAppointment", new { id = appointment.Id }, appointment);
+        }
+        catch (Exception ex)
+        {
+            var innerExceptionMessage = ex.InnerException?.Message;
+            Console.WriteLine($"Error al guardar el turno: {innerExceptionMessage}");
+            return StatusCode(500, $"Error al guardar el turno: {innerExceptionMessage}");
+        }
     }
 
-    // PUT: api/Appointments/5
     [HttpPut("{id}")]
     public async Task<IActionResult> PutAppointment(int id, Appointment appointment)
     {
-        if (id != appointment.Id)
-        {
-            return BadRequest();
-        }
+        appointment.Id = id;
+
+        appointment.ModifiedAt = DateTime.UtcNow;
+        appointment.AppointmentDate = DateTime.SpecifyKind(
+            appointment.AppointmentDate,
+            DateTimeKind.Utc
+        );
 
         _context.Entry(appointment).State = EntityState.Modified;
 
@@ -104,7 +145,10 @@ public class AppointmentsController : ControllerBase
             return NotFound();
         }
 
-        _context.Appointments.Remove(appointment);
+        appointment.IsEnabled = false;
+        appointment.ModifiedAt = DateTime.UtcNow;
+
+        _context.Entry(appointment).State = EntityState.Modified;
         await _context.SaveChangesAsync();
 
         return NoContent();
