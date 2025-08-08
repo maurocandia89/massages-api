@@ -1,5 +1,6 @@
 ﻿using Message.API.Infrastructure.Data;
 using Message.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,7 @@ public class AppointmentsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointments(
         string? date = null,
         [FromQuery] string? clientName = null,
@@ -80,6 +82,7 @@ public class AppointmentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Cliente")]
     public async Task<ActionResult<Appointment>> PostAppointment(Appointment appointment)
     {
         try
