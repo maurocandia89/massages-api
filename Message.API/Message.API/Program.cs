@@ -5,6 +5,7 @@ using Message.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration; // Se necesita para acceder a la configuración de JWT
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +21,11 @@ builder.Services.AddCors(options =>
         policy =>
         {
             policy
-                .WithOrigins("http://localhost:4200", "https://localhost:4200")
+                .WithOrigins(
+                    "http://localhost:4200",
+                    "https://localhost:4200",
+                    "http://127.0.0.1:4200"
+                )
                 .AllowAnyHeader()
                 .AllowAnyMethod();
         }
@@ -39,9 +44,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-// 1. Configurar Identity
+// 1. Configurar Identity para usar Guid como clave
 builder
-    .Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+    .Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     {
         options.Password.RequireDigit = false;
         options.Password.RequireLowercase = false;

@@ -1,159 +1,258 @@
-﻿using Message.API.Infrastructure.Data;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Message.API.Infrastructure.Data;
 using Message.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace Message.API.Controllers;
-
-[Route("api/[controller]")]
-[ApiController]
-public class AppointmentsController : ControllerBase
+namespace Message.API.Controllers
 {
-    private readonly ApplicationDbContext _context;
-
-    public AppointmentsController(ApplicationDbContext context)
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize] // Proteger todos los endpoints del controlador por defecto
+    public class AppointmentsController : ControllerBase
     {
-        _context = context;
-    }
+        private readonly ApplicationDbContext _context;
 
-    [HttpGet]
-    [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointments(
-        string? date = null,
-        [FromQuery] string? clientName = null,
-        string? sortBy = null,
-        string? sortDirection = null
-    )
-    {
-        IQueryable<Appointment> query = _context.Appointments;
-
-        query = query.Where(a => a.IsEnabled);
-
-        if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out DateTime parsedDate))
+        public AppointmentsController(ApplicationDbContext context)
         {
-            parsedDate = DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc);
-            query = query.Where(a => a.AppointmentDate.Date == parsedDate.Date);
+            _context = context;
         }
 
-        if (!string.IsNullOrEmpty(clientName))
+        // GET: api/Appointments
+        // Solo accesible para administradores
+        [HttpGet]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetAppointments()
         {
-            query = query.Where(a => a.ClientName.ToLower().Contains(clientName.ToLower()));
+            var appointments = await _context
+                .Appointments.Include(a => a.Client)
+                .Select(a => new AppointmentDto
+                {
+                    Id = a.Id,
+                    Title = a.Title,
+                    Description = a.Description,
+                    StartTime = a.StartTime,
+                    EndTime = a.EndTime,
+                    ClientId = a.ClientId,
+                    ClientName = $"{a.Client!.Name} {a.Client.LastName}",
+                })
+                .ToListAsync();
+
+            return Ok(appointments);
         }
 
-        if (!string.IsNullOrEmpty(sortBy))
+        // NUEVO: GET: api/Appointments/my-appointments
+        // Permite al cliente ver solo sus propios turnos
+        [HttpGet("my-appointments")]
+        [Authorize(Roles = "Cliente")]
+        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetMyAppointments()
         {
-            var isDescending = sortDirection?.ToLower() == "desc";
-
-            query = sortBy.ToLower() switch
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdString == null)
             {
-                "clientname" => isDescending
-                    ? query.OrderByDescending(a => a.ClientName)
-                    : query.OrderBy(a => a.ClientName),
-                "appointmentdate" => isDescending
-                    ? query.OrderByDescending(a => a.AppointmentDate)
-                    : query.OrderBy(a => a.AppointmentDate),
-                "starttime" => isDescending
-                    ? query.OrderByDescending(a => a.StartTime)
-                    : query.OrderBy(a => a.StartTime),
-                _ => query.OrderBy(a => a.Id),
+                return Unauthorized();
+            }
+
+            var clientAppointments = await _context
+                .Appointments.Include(a => a.Client)
+                .Where(a => a.ClientId == Guid.Parse(userIdString))
+                .Select(a => new AppointmentDto
+                {
+                    Id = a.Id,
+                    Title = a.Title,
+                    Description = a.Description,
+                    StartTime = a.StartTime,
+                    EndTime = a.EndTime,
+                    ClientId = a.ClientId,
+                    ClientName = $"{a.Client!.Name} {a.Client.LastName}",
+                })
+                .ToListAsync();
+
+            return Ok(clientAppointments);
+        }
+
+        // GET: api/Appointments/{id}
+        // Este endpoint puede ser usado por la dueña o el cliente de ese turno
+        [HttpGet("{id}")]
+        [Authorize]
+        public async Task<ActionResult<AppointmentDto>> GetAppointment(Guid id)
+        {
+            var appointment = await _context
+                .Appointments.Include(a => a.Client)
+                .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (appointment == null)
+            {
+                return NotFound();
+            }
+
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!User.IsInRole("Admin") && Guid.Parse(userIdString) != appointment.ClientId)
+            {
+                return Forbid();
+            }
+
+            var appointmentDto = new AppointmentDto
+            {
+                Id = appointment.Id,
+                Title = appointment.Title,
+                Description = appointment.Description,
+                StartTime = appointment.StartTime,
+                EndTime = appointment.EndTime,
+                ClientId = appointment.ClientId,
+                ClientName = $"{appointment.Client!.Name} {appointment.Client.LastName}",
             };
-        }
-        else
-        {
-            query = query.OrderBy(a => a.Id);
+
+            return Ok(appointmentDto);
         }
 
-        return await query.ToListAsync();
-    }
-
-    // GET: api/Appointments/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Appointment>> GetAppointment(int id)
-    {
-        var appointment = await _context.Appointments.FindAsync(id);
-
-        if (appointment == null)
+        // POST: api/Appointments
+        // Solo un cliente puede crear un turno para sí mismo
+        [HttpPost]
+        [Authorize(Roles = "Cliente")]
+        public async Task<ActionResult<Appointment>> PostAppointment(
+            AppointmentCreateDto appointmentDto
+        )
         {
-            return NotFound();
-        }
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
 
-        return appointment;
-    }
-
-    [HttpPost]
-    [Authorize(Roles = "Cliente")]
-    public async Task<ActionResult<Appointment>> PostAppointment(Appointment appointment)
-    {
-        try
-        {
-            // Convierte la fecha del turno a UTC antes de guardarla
-            appointment.AppointmentDate = DateTime.SpecifyKind(
-                appointment.AppointmentDate,
-                DateTimeKind.Utc
-            );
+            var appointment = new Appointment
+            {
+                Title = appointmentDto.Title,
+                Description = appointmentDto.Description,
+                StartTime = appointmentDto.StartTime.ToUniversalTime(),
+                EndTime = appointmentDto.StartTime.ToUniversalTime().AddHours(1),
+                ClientId = Guid.Parse(userId),
+            };
 
             _context.Appointments.Add(appointment);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetAppointment", new { id = appointment.Id }, appointment);
+            return CreatedAtAction(
+                nameof(GetAppointment),
+                new { id = appointment.Id },
+                appointment
+            );
         }
-        catch (Exception ex)
+
+        // NUEVO: PUT: api/Appointments/{id}
+        // Permite a un cliente actualizar su propio turno
+        [HttpPut("{id}")]
+        [Authorize(Roles = "Cliente")]
+        public async Task<IActionResult> PutAppointment(
+            Guid id,
+            AppointmentUpdateDto appointmentDto
+        )
         {
-            var innerExceptionMessage = ex.InnerException?.Message;
-            Console.WriteLine($"Error al guardar el turno: {innerExceptionMessage}");
-            return StatusCode(500, $"Error al guardar el turno: {innerExceptionMessage}");
-        }
-    }
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdString == null)
+            {
+                return Unauthorized();
+            }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> PutAppointment(int id, Appointment appointment)
-    {
-        appointment.Id = id;
-
-        appointment.ModifiedAt = DateTime.UtcNow;
-        appointment.AppointmentDate = DateTime.SpecifyKind(
-            appointment.AppointmentDate,
-            DateTimeKind.Utc
-        );
-
-        _context.Entry(appointment).State = EntityState.Modified;
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_context.Appointments.Any(e => e.Id == id))
+            var appointment = await _context.Appointments.FindAsync(id);
+            if (appointment == null)
             {
                 return NotFound();
             }
-            else
+
+            // Validar que el usuario que intenta actualizar es el dueño del turno
+            if (appointment.ClientId != Guid.Parse(userIdString))
             {
-                throw;
+                return Forbid();
             }
+
+            appointment.Title = appointmentDto.Title;
+            appointment.Description = appointmentDto.Description;
+            // La fecha de inicio también debe convertirse a UTC
+            appointment.StartTime = appointmentDto.StartTime.ToUniversalTime();
+            appointment.EndTime = appointmentDto.StartTime.ToUniversalTime().AddHours(1);
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Appointments.Any(e => e.Id == id))
+                {
+                    return NotFound();
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent();
         }
 
-        return NoContent();
+        // NUEVO: DELETE: api/Appointments/{id}
+        // Permite a un cliente eliminar su propio turno
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Cliente")]
+        public async Task<IActionResult> DeleteAppointment(Guid id)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdString == null)
+            {
+                return Unauthorized();
+            }
+
+            var appointment = await _context.Appointments.FindAsync(id);
+            if (appointment == null)
+            {
+                return NotFound();
+            }
+
+            // Validar que el usuario que intenta borrar es el dueño del turno
+            if (appointment.ClientId != Guid.Parse(userIdString))
+            {
+                return Forbid();
+            }
+
+            _context.Appointments.Remove(appointment);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
     }
 
-    // DELETE: api/Appointments/5
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteAppointment(int id)
+    // DTO para devolver los datos de los turnos
+    public class AppointmentDto
     {
-        var appointment = await _context.Appointments.FindAsync(id);
-        if (appointment == null)
-        {
-            return NotFound();
-        }
+        public Guid Id { get; set; }
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public Guid ClientId { get; set; }
+        public string ClientName { get; set; }
+    }
 
-        appointment.IsEnabled = false;
-        appointment.ModifiedAt = DateTime.UtcNow;
+    // DTO para la creación de turnos
+    public class AppointmentCreateDto
+    {
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public required DateTime StartTime { get; set; }
+    }
 
-        _context.Entry(appointment).State = EntityState.Modified;
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+    // NUEVO DTO para la actualización de turnos
+    public class AppointmentUpdateDto
+    {
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public required DateTime StartTime { get; set; }
     }
 }

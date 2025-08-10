@@ -31,13 +31,11 @@ namespace Message.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto model)
         {
-            // Validamos el modelo de datos
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            // Creamos un nuevo usuario
             var user = new ApplicationUser
             {
                 UserName = model.Email,
@@ -45,15 +43,17 @@ namespace Message.API.Controllers
                 Name = model.Name,
                 LastName = model.LastName,
             };
+
             var result = await _userManager.CreateAsync(user, model.Password);
 
             if (result.Succeeded)
             {
-                // Si el registro fue exitoso, devuelve un mensaje de éxito
+                // **PASO CLAVE**: Asignar el rol de "Cliente" por defecto a los nuevos usuarios.
+                // Esta es la parte que vamos a verificar con tu prueba.
+                await _userManager.AddToRoleAsync(user, "Cliente");
                 return Ok(new { message = "Registro de usuario exitoso." });
             }
 
-            // Si el registro falló, devuelve los errores
             return BadRequest(result.Errors);
         }
 
@@ -66,42 +66,49 @@ namespace Message.API.Controllers
                 return BadRequest(ModelState);
             }
 
-            // Intenta iniciar sesión con la contraseña
-            var result = await _signInManager.PasswordSignInAsync(
-                model.Email,
-                model.Password,
-                false,
-                false
-            );
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "Usuario o contraseña incorrectos." });
+            }
+
+            var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
 
             if (result.Succeeded)
             {
-                // Si el login fue exitoso, genera un token JWT
-                var token = GenerateJwtToken(model.Email);
+                var token = await GenerateJwtToken(user);
                 return Ok(new { token });
             }
 
-            // Si el login falló, devuelve un error
             return Unauthorized(new { message = "Usuario o contraseña incorrectos." });
         }
 
-        // Método para generar el token JWT
-        private string GenerateJwtToken(string email)
+        // Método para generar el token JWT con los roles del usuario
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
-            var claims = new[]
+            var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, email),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.Email, user.Email),
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+            // **PASO CLAVE**: Obtener todos los roles del usuario y añadirlos como claims.
+            // Si el usuario no tiene roles, esta lista estará vacía y no se añadirán claims.
+            var roles = await _userManager.GetRolesAsync(user);
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddDays(30), // El token expira en 30 días
+                expires: DateTime.Now.AddHours(2),
                 signingCredentials: credentials
             );
 
@@ -112,17 +119,16 @@ namespace Message.API.Controllers
     // DTOs (Data Transfer Objects) para el registro
     public class RegisterDto
     {
-        // Se agregaron las propiedades Name y LastName
-        public string Name { get; set; }
-        public string LastName { get; set; }
-        public string Email { get; set; }
-        public string Password { get; set; }
+        public required string Name { get; set; }
+        public required string LastName { get; set; }
+        public required string Email { get; set; }
+        public required string Password { get; set; }
     }
 
     // DTOs para el login
     public class LoginDto
     {
-        public string Email { get; set; }
-        public string Password { get; set; }
+        public required string Email { get; set; }
+        public required string Password { get; set; }
     }
 }
