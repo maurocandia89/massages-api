@@ -1,59 +1,93 @@
-﻿using System.Linq;
+﻿// Archivo: Infrastructure/Data/ApplicationDbContext.cs
+using System.Linq;
+using System.Security.Claims;
 using System.Threading;
-using System.Threading.Tasks;
 using Message.API.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Message.API.Infrastructure.Data
 {
-    // Cambiamos el tipo base del DbContext para usar Guid para ApplicationUser y IdentityRole
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
     {
+        private readonly IHttpContextAccessor? _httpContextAccessor;
+
+        // Constructor para uso en tiempo de diseño por Entity Framework Core.
+        // Las herramientas de migración solo pueden proporcionar las opciones.
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-            : base(options) { }
+            : base(options)
+        {
+            _httpContextAccessor = null;
+        }
+
+        // Constructor original para uso en tiempo de ejecución de la aplicación.
+        public ApplicationDbContext(
+            DbContextOptions<ApplicationDbContext> options,
+            IHttpContextAccessor httpContextAccessor
+        )
+            : base(options)
+        {
+            _httpContextAccessor = httpContextAccessor;
+        }
 
         public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Treatment> Treatments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
-            // PASO CRUCIAL: Llama al método base primero para que EF configure
-            // todas las tablas de Identity. Esto evita el error de la clave.
             base.OnModelCreating(builder);
 
-            // AHORA, configura explícitamente la relación de tu modelo.
             builder
                 .Entity<Appointment>()
-                .HasOne(a => a.Client)
-                .WithMany(u => u.Appointments) // Agregamos WithMany para la relación
-                .HasForeignKey(a => a.ClientId);
+                .HasOne(a => a.Treatment)
+                .WithMany()
+                .HasForeignKey(a => a.TreatmentId)
+                .IsRequired();
         }
 
-        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        public override int SaveChanges()
         {
-            var entries = ChangeTracker.Entries().Where(e => e.Entity is BaseEntity);
+            AddTimestamps();
+            return base.SaveChanges();
+        }
+
+        public override async Task<int> SaveChangesAsync(
+            CancellationToken cancellationToken = default
+        )
+        {
+            AddTimestamps();
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+
+        private void AddTimestamps()
+        {
+            var entries = ChangeTracker
+                .Entries()
+                .Where(e =>
+                    e.Entity is BaseEntity
+                    && (e.State == EntityState.Added || e.State == EntityState.Modified)
+                );
+
+            var userIdClaim = _httpContextAccessor?.HttpContext?.User.FindFirst(
+                ClaimTypes.NameIdentifier
+            );
+            var currentUserId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : Guid.Empty;
 
             foreach (var entityEntry in entries)
             {
+                var baseEntity = (BaseEntity)entityEntry.Entity;
+
                 if (entityEntry.State == EntityState.Added)
                 {
-                    var baseEntity = (BaseEntity)entityEntry.Entity;
                     baseEntity.CreatedAt = DateTime.UtcNow;
-                    baseEntity.IsEnabled = true;
                 }
-
-                if (
-                    entityEntry.State == EntityState.Modified
-                    || entityEntry.State == EntityState.Added
-                )
+                else
                 {
-                    var baseEntity = (BaseEntity)entityEntry.Entity;
                     baseEntity.ModifiedAt = DateTime.UtcNow;
                 }
             }
-
-            return base.SaveChangesAsync(cancellationToken);
         }
     }
 }
