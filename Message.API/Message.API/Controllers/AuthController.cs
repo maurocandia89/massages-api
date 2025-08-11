@@ -27,7 +27,6 @@ public class AuthController : ControllerBase
         _configuration = configuration;
     }
 
-    // Endpoint para registrar un nuevo usuario
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto model)
     {
@@ -48,8 +47,6 @@ public class AuthController : ControllerBase
 
         if (result.Succeeded)
         {
-            // **PASO CLAVE**: Asignar el rol de "Cliente" por defecto a los nuevos usuarios.
-            // Esta es la parte que vamos a verificar con tu prueba.
             await _userManager.AddToRoleAsync(user, "Cliente");
             return Ok(new { message = "Registro de usuario exitoso." });
         }
@@ -57,7 +54,6 @@ public class AuthController : ControllerBase
         return BadRequest(result.Errors);
     }
 
-    // Endpoint para iniciar sesión
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto model)
     {
@@ -83,7 +79,6 @@ public class AuthController : ControllerBase
         return Unauthorized(new { message = "Usuario o contraseña incorrectos." });
     }
 
-    // Método para generar el token JWT con los roles del usuario
     private async Task<string> GenerateJwtToken(ApplicationUser user)
     {
         var claims = new List<Claim>
@@ -93,8 +88,6 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.Email, user.Email),
         };
 
-        // **PASO CLAVE**: Obtener todos los roles del usuario y añadirlos como claims.
-        // Si el usuario no tiene roles, esta lista estará vacía y no se añadirán claims.
         var roles = await _userManager.GetRolesAsync(user);
         foreach (var role in roles)
         {
@@ -116,7 +109,6 @@ public class AuthController : ControllerBase
     }
 }
 
-// DTOs (Data Transfer Objects) para el registro
 public class RegisterDto
 {
     public required string Name { get; set; }
@@ -125,7 +117,6 @@ public class RegisterDto
     public required string Password { get; set; }
 }
 
-// DTOs para el login
 public class LoginDto
 {
     public required string Email { get; set; }

@@ -5,14 +5,12 @@ using Message.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration; // Se necesita para acceder a la configuración de JWT
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<DataSeeder>();
 
-// Add services to the container.
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
@@ -33,18 +31,14 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
-
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure PostgreSQL Database Connection
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-// 1. Configurar Identity para usar Guid como clave
 builder
     .Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     {
@@ -58,7 +52,6 @@ builder
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-// 2. Configurar la autenticación JWT
 builder
     .Services.AddAuthentication(options =>
     {
@@ -89,7 +82,6 @@ using (var scope = app.Services.CreateScope())
     await seeder.SeedRolesAndAdminUserAsync();
 }
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

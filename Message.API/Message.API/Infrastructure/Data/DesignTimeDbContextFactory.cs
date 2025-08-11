@@ -7,7 +7,6 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Applicatio
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
-        // Construye una configuración simple para obtener la cadena de conexión
         IConfigurationRoot configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json")
@@ -16,7 +15,6 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Applicatio
         var builder = new DbContextOptionsBuilder<ApplicationDbContext>();
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        // Si la cadena de conexión es null, lanza un error para que sepamos qué pasa.
         if (string.IsNullOrEmpty(connectionString))
         {
             throw new InvalidOperationException(
@@ -24,10 +22,8 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Applicatio
             );
         }
 
-        // Aquí es donde se especifica que usas PostgreSQL
         builder.UseNpgsql(connectionString);
 
-        // Se usa el constructor de diseño para crear el DbContext.
         return new ApplicationDbContext(builder.Options);
     }
 }

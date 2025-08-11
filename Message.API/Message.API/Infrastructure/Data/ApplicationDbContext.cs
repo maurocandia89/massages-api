@@ -1,92 +1,82 @@
-﻿// Archivo: Infrastructure/Data/ApplicationDbContext.cs
-using System.Linq;
-using System.Security.Claims;
-using System.Threading;
+﻿using System.Security.Claims;
 using Message.API.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace Message.API.Infrastructure.Data
+namespace Message.API.Infrastructure.Data;
+
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
-    public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+    private readonly IHttpContextAccessor? _httpContextAccessor;
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
     {
-        private readonly IHttpContextAccessor? _httpContextAccessor;
+        _httpContextAccessor = null;
+    }
 
-        // Constructor para uso en tiempo de diseño por Entity Framework Core.
-        // Las herramientas de migración solo pueden proporcionar las opciones.
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-            : base(options)
-        {
-            _httpContextAccessor = null;
-        }
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options,
+        IHttpContextAccessor httpContextAccessor
+    )
+        : base(options)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
 
-        // Constructor original para uso en tiempo de ejecución de la aplicación.
-        public ApplicationDbContext(
-            DbContextOptions<ApplicationDbContext> options,
-            IHttpContextAccessor httpContextAccessor
-        )
-            : base(options)
-        {
-            _httpContextAccessor = httpContextAccessor;
-        }
+    public DbSet<Appointment> Appointments { get; set; }
+    public DbSet<Treatment> Treatments { get; set; }
 
-        public DbSet<Appointment> Appointments { get; set; }
-        public DbSet<Treatment> Treatments { get; set; }
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
 
-        protected override void OnModelCreating(ModelBuilder builder)
-        {
-            base.OnModelCreating(builder);
+        builder
+            .Entity<Appointment>()
+            .HasOne(a => a.Treatment)
+            .WithMany()
+            .HasForeignKey(a => a.TreatmentId)
+            .IsRequired();
+    }
 
-            builder
-                .Entity<Appointment>()
-                .HasOne(a => a.Treatment)
-                .WithMany()
-                .HasForeignKey(a => a.TreatmentId)
-                .IsRequired();
-        }
+    public override int SaveChanges()
+    {
+        AddTimestamps();
+        return base.SaveChanges();
+    }
 
-        public override int SaveChanges()
-        {
-            AddTimestamps();
-            return base.SaveChanges();
-        }
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        AddTimestamps();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
 
-        public override async Task<int> SaveChangesAsync(
-            CancellationToken cancellationToken = default
-        )
-        {
-            AddTimestamps();
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-
-        private void AddTimestamps()
-        {
-            var entries = ChangeTracker
-                .Entries()
-                .Where(e =>
-                    e.Entity is BaseEntity
-                    && (e.State == EntityState.Added || e.State == EntityState.Modified)
-                );
-
-            var userIdClaim = _httpContextAccessor?.HttpContext?.User.FindFirst(
-                ClaimTypes.NameIdentifier
+    private void AddTimestamps()
+    {
+        var entries = ChangeTracker
+            .Entries()
+            .Where(e =>
+                e.Entity is BaseEntity
+                && (e.State == EntityState.Added || e.State == EntityState.Modified)
             );
-            var currentUserId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : Guid.Empty;
 
-            foreach (var entityEntry in entries)
+        var userIdClaim = _httpContextAccessor?.HttpContext?.User.FindFirst(
+            ClaimTypes.NameIdentifier
+        );
+        var currentUserId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : Guid.Empty;
+
+        foreach (var entityEntry in entries)
+        {
+            var baseEntity = (BaseEntity)entityEntry.Entity;
+
+            if (entityEntry.State == EntityState.Added)
             {
-                var baseEntity = (BaseEntity)entityEntry.Entity;
-
-                if (entityEntry.State == EntityState.Added)
-                {
-                    baseEntity.CreatedAt = DateTime.UtcNow;
-                }
-                else
-                {
-                    baseEntity.ModifiedAt = DateTime.UtcNow;
-                }
+                baseEntity.CreatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                baseEntity.ModifiedAt = DateTime.UtcNow;
             }
         }
     }

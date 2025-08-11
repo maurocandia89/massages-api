@@ -1,18 +1,15 @@
 ﻿using Message.API.Models;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 
 namespace Message.API.Services;
 
 public class DataSeeder
 {
-    // Cambiamos el tipo de RoleManager para que use IdentityRole<Guid>
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
 
     public DataSeeder(
-        // También cambiamos el tipo del parámetro en el constructor
         RoleManager<IdentityRole<Guid>> roleManager,
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration
@@ -23,7 +20,6 @@ public class DataSeeder
         _configuration = configuration;
     }
 
-    // Método principal para sembrar los datos
     public async Task SeedRolesAndAdminUserAsync()
     {
         await CreateRoleAsync("Admin");
@@ -37,7 +33,6 @@ public class DataSeeder
         var roleExist = await _roleManager.RoleExistsAsync(roleName);
         if (!roleExist)
         {
-            // Ahora creamos una instancia de IdentityRole<Guid>
             await _roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
         }
     }
@@ -47,7 +42,6 @@ public class DataSeeder
         var ownerEmail = _configuration["Owner:Email"];
         var ownerPassword = _configuration["Owner:Password"];
 
-        // Si el email de la dueña no está configurado, no hacemos nada.
         if (string.IsNullOrEmpty(ownerEmail) || string.IsNullOrEmpty(ownerPassword))
         {
             return;
@@ -67,7 +61,6 @@ public class DataSeeder
             var createResult = await _userManager.CreateAsync(newOwner, ownerPassword);
             if (createResult.Succeeded)
             {
-                // Asignamos el rol de "Dueña" al usuario recién creado
                 await _userManager.AddToRoleAsync(newOwner, "Admin");
             }
         }
