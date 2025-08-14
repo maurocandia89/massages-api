@@ -1,37 +1,29 @@
-# ==========================================================
-# Etapa de compilación (build)
-# Usa la imagen del SDK para construir y publicar la aplicación.
-# ==========================================================
+# Primera etapa: Construir la aplicación
+# Usamos una imagen con el SDK de .NET para compilar el proyecto.
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-WORKDIR /src
+WORKDIR /app
 
-# Copiamos solo el archivo .csproj al directorio del proyecto en el contenedor.
-# La ruta es relativa a la raíz del repositorio (la carpeta massages-api).
-COPY ["Message.API/Message.API.csproj", "Message.API/"]
-
-# Restauramos las dependencias.
-RUN dotnet restore "Message.API/Message.API.csproj"
-
-# Copiamos todo el resto del código fuente.
+# Copia todo el contenido del repositorio al directorio de trabajo en el contenedor.
+# Esto asegura que todos los archivos del proyecto estén disponibles.
 COPY . .
 
-# Nos movemos al directorio del proyecto para la publicación.
-WORKDIR "/src/Message.API"
+# Restaura las dependencias del proyecto.
+# La ruta es relativa al WORKDIR (/app) y a la carpeta del proyecto.
+RUN dotnet restore "Message.API/Message.API.csproj"
 
-# Publicamos la aplicación en el directorio /app/out.
-RUN dotnet publish -c Release -o /app/out --no-restore
+# Publica la aplicación en modo "Release".
+RUN dotnet publish "Message.API/Message.API.csproj" -c Release -o /app/out
 
-# ==========================================================
-# Etapa final (runtime)
-# Usa la imagen de ASP.NET, que es más ligera, para ejecutar la aplicación.
-# ==========================================================
+# Segunda etapa: Crear la imagen final de la aplicación
+# Usamos una imagen más ligera que solo contiene el runtime de .NET.
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
-# Copiamos los archivos publicados desde la etapa de compilación.
+# Copia los archivos publicados desde la etapa 'build' a esta imagen final.
 COPY --from=build /app/out .
 
-# Configuramos la aplicación para que escuche en el puerto 8080 (el puerto por defecto de Railway).
+# Expone el puerto 8080 y configura la URL de la aplicación.
+# Railway usa el puerto 8080 por defecto.
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 EXPOSE 8080
 
