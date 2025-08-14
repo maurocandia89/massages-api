@@ -6,8 +6,8 @@ WORKDIR /source
 COPY . .
 
 # Restauramos dependencias y compilamos
-RUN dotnet restore
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet restore Message.API.csproj
+RUN dotnet publish Message.API.csproj -c Release -o /app/publish
 
 # Etapa final: runtime
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
@@ -18,4 +18,4 @@ COPY --from=build /app/publish .
 EXPOSE 5000
 
 # Comando para ejecutar la API
-ENTRYPOINT ["dotnet", "massages-api.dll"]
+ENTRYPOINT ["dotnet", "Message.API.dll"]
