@@ -6,7 +6,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # Copiamos solo el archivo .csproj al directorio del proyecto en el contenedor.
-# La ruta es relativa a la raíz del repositorio (la carpeta massages-api).
+# La ruta es relativa a la raíz del repositorio (donde está el Dockerfile).
 COPY ["Message.API/Message.API.csproj", "Message.API/"]
 
 # Restauramos las dependencias.
