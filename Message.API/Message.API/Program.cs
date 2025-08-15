@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Message.API.Infrastructure.Data;
 using Message.API.Models;
 using Message.API.Services;
@@ -9,13 +9,16 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+//Escuchar en puerto 5000 (Docker)
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(5000);
 });
 
+//Seeder para roles y admin
 builder.Services.AddScoped<DataSeeder>();
 
+//CORS
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
@@ -27,7 +30,8 @@ builder.Services.AddCors(options =>
                 .WithOrigins(
                     "http://localhost:4200",
                     "https://localhost:4200",
-                    "http://127.0.0.1:4200"
+                    "http://127.0.0.1:4200",
+                    "https://massages-frontend.vercel.app"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod();
@@ -39,11 +43,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//Conexión a PostgreSQL (Neon)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
+//Configuración de Identity
 builder
     .Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     {
@@ -57,6 +63,7 @@ builder
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+//Configuración JWT
 builder
     .Services.AddAuthentication(options =>
     {
@@ -81,8 +88,12 @@ builder
 
 var app = builder.Build();
 
+//Aplicar migraciones automáticamente + Seed
 using (var scope = app.Services.CreateScope())
 {
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate(); // ← Crea todas las tablas si no existen
+
     var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
     await seeder.SeedRolesAndAdminUserAsync();
 }
@@ -94,12 +105,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors(MyAllowSpecificOrigins);
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
