@@ -9,6 +9,11 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(5000);
+});
+
 builder.Services.AddScoped<DataSeeder>();
 
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";

@@ -1,0 +1,5 @@
+{
+  "build": {
+    "root": "Message.API/Message.API"
+  }
+}
