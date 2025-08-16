@@ -146,6 +146,16 @@ public class AppointmentsController : ControllerBase
         AppointmentCreateDto appointmentDto
     )
     {
+        var hour = appointmentDto.AppointmentDate.Hour;
+        var minutes = appointmentDto.AppointmentDate.Minute;
+
+        if (hour < 9 || hour > 19 || minutes != 0)
+        {
+            return BadRequest(
+                "Los turnos deben ser entre las 9:00 y las 20:00 hs, en bloques de 1 hora."
+            );
+        }
+
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userId == null)
         {
@@ -181,6 +191,16 @@ public class AppointmentsController : ControllerBase
         if (userIdString == null)
         {
             return Unauthorized();
+        }
+
+        var hour = appointmentDto.AppointmentDate.Hour;
+        var minutes = appointmentDto.AppointmentDate.Minute;
+
+        if (hour < 9 || hour > 19 || minutes != 0)
+        {
+            return BadRequest(
+                "Los turnos deben ser entre las 9:00 y las 20:00 hs, en bloques de 1 hora."
+            );
         }
 
         var appointment = await _context.Appointments.FindAsync(id);
