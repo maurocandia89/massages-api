@@ -88,11 +88,11 @@ builder
 
 var app = builder.Build();
 
-//Aplicar migraciones automáticamente + Seed
+// Aplicar migraciones automáticamente + Seed
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate(); // ← Crea todas las tablas si no existen
+    db.Database.Migrate();
 
     var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
     await seeder.SeedRolesAndAdminUserAsync();
@@ -105,8 +105,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors(MyAllowSpecificOrigins);
+app.UseRouting(); // ← importante para el orden del middleware
+app.UseCors(MyAllowSpecificOrigins); // ← debe ir antes de Auth
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+
+// Endpoint raíz para evitar el 404
+app.MapGet("/", () => Results.Ok("API de Massages funcionando 🚀"));
+
 app.Run();
