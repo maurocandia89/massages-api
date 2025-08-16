@@ -31,7 +31,8 @@ builder.Services.AddCors(options =>
                     "http://localhost:4200",
                     "https://localhost:4200",
                     "http://127.0.0.1:4200",
-                    "https://massages-frontend.vercel.app"
+                    "https://massages-frontend.vercel.app",
+                    "http://172.22.52.82:8080"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod();
@@ -113,6 +114,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Endpoint raíz para evitar el 404
-app.MapGet("/", () => Results.Ok("API de Massages funcionando 🚀"));
+app.MapGet("/", () => Results.Ok("API de Massages funcionando"));
 
 app.Run();
