@@ -1,4 +1,5 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using System.ComponentModel.DataAnnotations;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Message.API.Models;
@@ -111,14 +112,28 @@ public class AuthController : ControllerBase
 
 public class RegisterDto
 {
+    [Required(ErrorMessage = "El nombre es obligatorio.")]
     public required string Name { get; set; }
+
+    [Required(ErrorMessage = "El apellido es obligatorio.")]
     public required string LastName { get; set; }
+
+    [Required(ErrorMessage = "El email es obligatorio.")]
+    [EmailAddress(ErrorMessage = "El formato del email no es válido.")]
     public required string Email { get; set; }
+
+    [Required(ErrorMessage = "La contraseña es obligatoria.")]
+    [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres.")]
     public required string Password { get; set; }
 }
 
 public class LoginDto
 {
+    [Required(ErrorMessage = "El email es obligatorio.")]
+    [EmailAddress(ErrorMessage = "El formato del email no es válido.")]
     public required string Email { get; set; }
+
+    [Required(ErrorMessage = "La contraseña es obligatoria.")]
+    [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres.")]
     public required string Password { get; set; }
 }
