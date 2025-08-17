@@ -15,6 +15,9 @@ public class EmailService : IEmailSender
     {
         var smtp = _config.GetSection("Smtp");
 
+        Console.WriteLine($"📤 SMTP Host: {smtp["Host"]}");
+        Console.WriteLine($"📤 SMTP Username: {smtp["Username"]}");
+
         var client = new SmtpClient(smtp["Host"], int.Parse(smtp["Port"]))
         {
             Credentials = new NetworkCredential(smtp["Username"], smtp["Password"]),

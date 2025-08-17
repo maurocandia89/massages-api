@@ -90,6 +90,8 @@ builder
         };
     });
 
+Console.WriteLine($"Entorno activo: {builder.Environment.EnvironmentName}");
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())

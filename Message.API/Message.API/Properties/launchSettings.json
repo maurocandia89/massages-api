@@ -47,5 +47,9 @@
       "applicationUrl": "http://localhost:18097",
       "sslPort": 44308
     }
+  },
+  "environmentVariables": {
+    "ASPNETCORE_ENVIRONMENT": "Production"
   }
+
 }
