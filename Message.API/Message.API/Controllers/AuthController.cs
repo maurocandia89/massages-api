@@ -48,6 +48,7 @@ public class AuthController : ControllerBase
             Email = model.Email,
             Name = model.Name,
             LastName = model.LastName,
+            EmailConfirmed = true,
         };
 
         var result = await _userManager.CreateAsync(user, model.Password);
@@ -59,22 +60,7 @@ public class AuthController : ControllerBase
 
         await _userManager.AddToRoleAsync(user, "Cliente");
 
-        var confirmUrlBase = _configuration["Frontend:ConfirmEmailUrl"];
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        var confirmationLink =
-            $"{confirmUrlBase}?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-
-        await _emailSender.SendEmailAsync(
-            user.Email,
-            "Confirma tu cuenta",
-            $@"
-        <p>Hola {user.Name},</p>
-        <p>Gracias por registrarte en Massage App.</p>
-        <p>Haz clic <a href='{confirmationLink}'>aquí</a> para confirmar tu cuenta.</p>
-        <p>Si no te registraste, puedes ignorar este mensaje.</p>"
-        );
-
-        return Ok(new { message = "Registro exitoso. Revisa tu correo para confirmar tu cuenta." });
+        return Ok(new { message = "Registro exitoso. Ya puedes iniciar sesión." });
     }
 
     [HttpPost("login")]
