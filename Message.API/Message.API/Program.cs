@@ -4,10 +4,13 @@ using Message.API.Models;
 using Message.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddScoped<IEmailSender, EmailService>();
 
 //Escuchar en puerto 5000 (Docker)
 builder.WebHost.ConfigureKestrel(options =>

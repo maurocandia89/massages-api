@@ -1,9 +1,12 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
+using System.Web;
 using Message.API.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
@@ -16,16 +19,19 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
+    private readonly IEmailSender _emailSender;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IEmailSender emailSender
     )
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _configuration = configuration;
+        _emailSender = emailSender;
     }
 
     [HttpPost("register")]
@@ -46,13 +52,29 @@ public class AuthController : ControllerBase
 
         var result = await _userManager.CreateAsync(user, model.Password);
 
-        if (result.Succeeded)
+        if (!result.Succeeded)
         {
-            await _userManager.AddToRoleAsync(user, "Cliente");
-            return Ok(new { message = "Registro de usuario exitoso." });
+            return BadRequest(result.Errors);
         }
 
-        return BadRequest(result.Errors);
+        await _userManager.AddToRoleAsync(user, "Cliente");
+
+        var confirmUrlBase = _configuration["Frontend:ConfirmEmailUrl"];
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        var confirmationLink =
+            $"{confirmUrlBase}?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+        await _emailSender.SendEmailAsync(
+            user.Email,
+            "Confirma tu cuenta",
+            $@"
+        <p>Hola {user.Name},</p>
+        <p>Gracias por registrarte en Massage App.</p>
+        <p>Haz clic <a href='{confirmationLink}'>aquí</a> para confirmar tu cuenta.</p>
+        <p>Si no te registraste, puedes ignorar este mensaje.</p>"
+        );
+
+        return Ok(new { message = "Registro exitoso. Revisa tu correo para confirmar tu cuenta." });
     }
 
     [HttpPost("login")]
@@ -67,6 +89,13 @@ public class AuthController : ControllerBase
         if (user == null)
         {
             return Unauthorized(new { message = "Usuario o contraseña incorrectos." });
+        }
+
+        if (!await _userManager.IsEmailConfirmedAsync(user))
+        {
+            return Unauthorized(
+                new { message = "Debes confirmar tu correo antes de iniciar sesión." }
+            );
         }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
@@ -108,6 +137,60 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail(string userId, string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return NotFound();
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (result.Succeeded)
+        {
+            return Ok(new { message = "Email confirmado correctamente." });
+        }
+
+        return BadRequest(result.Errors);
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
+        {
+            return BadRequest("Usuario no encontrado o email no confirmado.");
+        }
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var resetUrlBase = _configuration["Frontend:ResetPasswordUrl"];
+        var resetLink = $"{resetUrlBase}?email={dto.Email}&token={WebUtility.UrlEncode(token)}";
+
+        await _emailSender.SendEmailAsync(
+            dto.Email,
+            "Recuperar contraseña",
+            $"<p>Hola {user.Name},</p><p>Haz clic <a href='{resetLink}'>aquí</a> para cambiar tu contraseña.</p>"
+        );
+
+        return Ok(new { message = "Correo de recuperación enviado." });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+            return NotFound();
+
+        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+        if (result.Succeeded)
+        {
+            return Ok(new { message = "Contraseña actualizada correctamente." });
+        }
+
+        return BadRequest(result.Errors);
+    }
 }
 
 public class RegisterDto
@@ -136,4 +219,16 @@ public class LoginDto
     [Required(ErrorMessage = "La contraseña es obligatoria.")]
     [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres.")]
     public required string Password { get; set; }
+}
+
+public class ForgotPasswordDto
+{
+    public required string Email { get; set; }
+}
+
+public class ResetPasswordDto
+{
+    public required string Email { get; set; }
+    public required string Token { get; set; }
+    public required string NewPassword { get; set; }
 }
