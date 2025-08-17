@@ -26,7 +26,7 @@ public class EmailService : IEmailSender
 
         var mail = new MailMessage
         {
-            From = new MailAddress(smtp["Sender"], smtp["Massage App"]),
+            From = new MailAddress(smtp["Sender"], "Massage App"),
             Subject = subject,
             Body = htmlMessage,
             IsBodyHtml = true,
