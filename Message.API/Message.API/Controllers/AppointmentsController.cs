@@ -266,6 +266,37 @@ public class AppointmentsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPut("admin/approve/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ApproveAppointment(Guid id)
+    {
+        var appointment = await _context.Appointments.FindAsync(id);
+        if (appointment == null)
+            return NotFound();
+
+        appointment.Estado = "Aprobado";
+        appointment.ModifiedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPut("admin/cancel/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> CancelAppointment(Guid id, [FromBody] string motivo)
+    {
+        var appointment = await _context.Appointments.FindAsync(id);
+        if (appointment == null)
+            return NotFound();
+
+        appointment.Estado = "Cancelado";
+        appointment.MotivoCancelacion = motivo;
+        appointment.ModifiedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
 }
 
 public class AppointmentCreateDto
@@ -290,4 +321,7 @@ public class AppointmentDto
     public string? ClientName { get; set; }
     public Guid TreatmentId { get; set; }
     public string? TreatmentTitle { get; set; }
+
+    public string Estado { get; set; } = "Pendiente";
+    public string? MotivoCancelacion { get; set; }
 }

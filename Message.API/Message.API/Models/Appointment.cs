@@ -7,4 +7,6 @@ public class Appointment : BaseEntity
     public ApplicationUser? Client { get; set; }
     public required Guid TreatmentId { get; set; }
     public Treatment? Treatment { get; set; }
+    public string Estado { get; set; } = "Pendiente";
+    public string? MotivoCancelacion { get; set; }
 }
