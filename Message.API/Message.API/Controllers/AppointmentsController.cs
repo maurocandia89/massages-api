@@ -51,6 +51,8 @@ public class AppointmentsController : ControllerBase
                 ClientName = $"{a.Client!.Name} {a.Client.LastName}",
                 TreatmentId = a.TreatmentId,
                 TreatmentTitle = a.Treatment!.Title,
+                Estado = a.Estado,
+                MotivoCancelacion = a.MotivoCancelacion,
             })
             .ToListAsync();
 
@@ -96,6 +98,8 @@ public class AppointmentsController : ControllerBase
                 ClientName = $"{a.Client!.Name} {a.Client.LastName}",
                 TreatmentId = a.TreatmentId,
                 TreatmentTitle = a.Treatment!.Title,
+                Estado = a.Estado,
+                MotivoCancelacion = a.MotivoCancelacion,
             })
             .ToListAsync();
 
@@ -215,6 +219,9 @@ public class AppointmentsController : ControllerBase
             return Forbid();
         }
 
+        if (appointment.Estado == "Finalizado")
+            return BadRequest("No se puede modificar un turno que ya está finalizado.");
+
         appointment.AppointmentDate = appointmentDto.AppointmentDate.ToUniversalTime();
         appointment.TreatmentId = appointmentDto.TreatmentId;
 
@@ -284,14 +291,14 @@ public class AppointmentsController : ControllerBase
 
     [HttpPut("admin/cancel/{id}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> CancelAppointment(Guid id, [FromBody] string motivo)
+    public async Task<IActionResult> CancelAppointment(Guid id, [FromBody] CancelAppointmentDto dto)
     {
         var appointment = await _context.Appointments.FindAsync(id);
         if (appointment == null)
             return NotFound();
 
         appointment.Estado = "Cancelado";
-        appointment.MotivoCancelacion = motivo;
+        appointment.MotivoCancelacion = dto.Motivo;
         appointment.ModifiedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -321,7 +328,11 @@ public class AppointmentDto
     public string? ClientName { get; set; }
     public Guid TreatmentId { get; set; }
     public string? TreatmentTitle { get; set; }
-
     public string Estado { get; set; } = "Pendiente";
-    public string? MotivoCancelacion { get; set; }
+    public string MotivoCancelacion { get; set; } = string.Empty;
+}
+
+public class CancelAppointmentDto
+{
+    public string Motivo { get; set; } = string.Empty;
 }
